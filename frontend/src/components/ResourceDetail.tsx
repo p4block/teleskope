@@ -5,6 +5,8 @@ import {
     useExecPod,
     useEditResource,
     useRelatedResources,
+    useDeleteResource,
+    usePodLogs,
     type ApiResourceInfo
 } from "../hooks/useKube";
 import {
@@ -45,7 +47,9 @@ export function ResourceDetail({
     );
 
     const editResource = useEditResource();
+    const deleteResource = useDeleteResource();
     const execPod = useExecPod();
+    const podLogs = usePodLogs();
     const { data: related } = useRelatedResources(
         data ? {
             group: resource.group,
@@ -87,11 +91,58 @@ export function ResourceDetail({
         }
     };
 
+    const handleDelete = () => {
+        if (window.confirm(`Are you sure you want to delete ${resource.kind} ${resourceName}?`)) {
+            deleteResource.mutate({
+                group: resource.group,
+                version: resource.version,
+                kind: resource.kind,
+                plural: resource.name,
+                namespace: namespace || "",
+                name: resourceName
+            }, {
+                onSuccess: () => {
+                    // Close the detail panel immediately
+                    onClose();
+                },
+                onError: (error) => {
+                    alert(`Failed to delete ${resource.kind} ${resourceName}: ${error.message}`);
+                }
+            });
+        }
+    };
+
+    const handleLogs = (follow: boolean = false, containerName?: string) => {
+        if (resource.kind === "Pod") {
+            if (follow) {
+                podLogs.mutate({
+                    namespace: namespace || "default",
+                    podName: resourceName,
+                    containerName,
+                    follow: true,
+                    tailLines: 100
+                });
+            } else {
+                podLogs.mutate({
+                    namespace: namespace || "default",
+                    podName: resourceName,
+                    containerName,
+                    follow: false,
+                    tailLines: 100
+                }, {
+                    onSuccess: (logs) => {
+                        alert(logs);
+                    }
+                });
+            }
+        }
+    };
+
     // Get detail sections based on resource kind
     const detailSections = useMemo(() => {
         if (!data) return [];
-        return getDetailSections(resource.kind, data, { onExec: handleExec });
-    }, [resource.kind, data]);
+        return getDetailSections(resource.kind, data, { onExec: handleExec, onLogs: handleLogs });
+    }, [resource.kind, data, handleExec, handleLogs]);
 
     return (
         <div className="detail-panel">
@@ -105,6 +156,26 @@ export function ResourceDetail({
                     )}
                 </div>
                 <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                    {resource.kind === "Pod" && (
+                        <>
+                            <button
+                                className="btn btn-secondary"
+                                style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
+                                onClick={() => handleLogs(false)}
+                                title="View pod logs"
+                            >
+                                Logs
+                            </button>
+                            <button
+                                className="btn btn-secondary"
+                                style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
+                                onClick={() => handleLogs(true)}
+                                title="Follow pod logs in terminal"
+                            >
+                                Follow
+                            </button>
+                        </>
+                    )}
                     <button
                         className="btn btn-secondary"
                         style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
@@ -112,6 +183,14 @@ export function ResourceDetail({
                         title="Edit YAML in terminal"
                     >
                         Edit
+                    </button>
+                    <button
+                        className="btn btn-danger"
+                        style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
+                        onClick={handleDelete}
+                        title={`Delete ${resource.kind}`}
+                    >
+                        Delete
                     </button>
                     <button className="detail-close-btn" onClick={onClose}>
                         ✕
@@ -362,7 +441,7 @@ function RawDataSection({ data }: { data: Record<string, unknown> }) {
 function getDetailSections(
     kind: string,
     data: Record<string, unknown>,
-    actions: { onExec: (container?: string) => void }
+    actions: { onExec: (container?: string) => void; onLogs?: (follow: boolean, container?: string) => void }
 ): SectionData[] {
     const metadata = data.metadata as Record<string, unknown> | undefined;
     const spec = data.spec as Record<string, unknown> | undefined;
@@ -383,7 +462,7 @@ function getDetailSections(
     // Kind-specific sections
     switch (kind) {
         case "Pod":
-            return [metadataSection, ...getPodSections(spec, status, actions.onExec)];
+            return [metadataSection, ...getPodSections(spec, status, actions.onExec, actions.onLogs)];
         case "Deployment":
             return [metadataSection, ...getDeploymentSections(spec, status)];
         case "Service":
@@ -402,7 +481,8 @@ function getDetailSections(
 function getPodSections(
     spec: Record<string, unknown> | undefined,
     status: Record<string, unknown> | undefined,
-    onExec: (container?: string) => void
+    onExec: (container?: string) => void,
+    onLogs?: (follow: boolean, container?: string) => void
 ): SectionData[] {
     const containers = (spec?.containers || []) as Array<Record<string, unknown>>;
     const containerStatuses = (status?.containerStatuses || []) as Array<Record<string, unknown>>;
@@ -429,13 +509,35 @@ function getPodSections(
                     value: (
                         <div key={String(c.name)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
                             <span style={{ fontSize: "0.75rem" }}>{`${String(c.image).split('/').pop()} | Ready: ${ready} | Restarts: ${restarts}`}</span>
-                            <button
-                                className="btn btn-secondary"
-                                style={{ padding: "0.125rem 0.375rem", fontSize: "0.625rem" }}
-                                onClick={() => onExec(String(c.name))}
-                            >
-                                Exec
-                            </button>
+                            <div style={{ display: "flex", gap: "0.25rem" }}>
+                                <button
+                                    className="btn btn-secondary"
+                                    style={{ padding: "0.125rem 0.375rem", fontSize: "0.625rem" }}
+                                    onClick={() => onExec(String(c.name))}
+                                >
+                                    Exec
+                                </button>
+                                {onLogs && (
+                                    <>
+                                        <button
+                                            className="btn btn-secondary"
+                                            style={{ padding: "0.125rem 0.375rem", fontSize: "0.625rem" }}
+                                            onClick={() => onLogs(false, String(c.name))}
+                                            title="View container logs"
+                                        >
+                                            Logs
+                                        </button>
+                                        <button
+                                            className="btn btn-secondary"
+                                            style={{ padding: "0.125rem 0.375rem", fontSize: "0.625rem" }}
+                                            onClick={() => onLogs(true, String(c.name))}
+                                            title="Follow container logs in terminal"
+                                        >
+                                            Follow
+                                        </button>
+                                    </>
+                                )}
+                            </div>
                         </div>
                     ) as ReactNode,
                 };

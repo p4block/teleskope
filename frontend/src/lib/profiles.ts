@@ -13,7 +13,7 @@ export interface GVK {
 export interface ColumnDefinition {
     header: string;
     path: string; // JSONPath expression
-    type: "text" | "link" | "age" | "status" | "list" | "boolean" | "number" | "container-statuses";
+    type: "text" | "link" | "age" | "status" | "pod-enhanced-status" | "list" | "boolean" | "number" | "container-statuses";
     width?: string;
 }
 
@@ -41,8 +41,8 @@ const NATIVE_PROFILES: Map<string, ResourceProfile> = new Map([
         {
             gvk: { group: "", version: "v1", kind: "Pod" },
             columns: [
+                { header: "Status", path: "$", type: "pod-enhanced-status", width: "40px" },
                 { header: "Name", path: "$.metadata.name", type: "link" },
-                { header: "Namespace", path: "$.metadata.namespace", type: "text" },
                 { header: "Containers", path: "$.status.containerStatuses[*]", type: "container-statuses" },
                 { header: "Node", path: "$.spec.nodeName", type: "text" },
                 { header: "Age", path: "$.metadata.creationTimestamp", type: "age" },
@@ -256,33 +256,33 @@ function getGenericProfile(gvk: GVK): ResourceProfile {
     };
 }
 
- /**
-  * Resolve the best profile for a given GVK
-  *
-  * Priority:
-  * 1. Native profiles (hardcoded)
-  * 2. User profiles (from ~/.config/teleskope/profiles/)
-  * 3. Discovery API (additionalPrinterColumns from CRD)
-  * 4. Generic fallback
-  */
- export function resolveResourceProfile(gvk: GVK): ResourceProfile {
-     const key = getProfileKey(gvk);
+/**
+ * Resolve the best profile for a given GVK
+ *
+ * Priority:
+ * 1. Native profiles (hardcoded)
+ * 2. User profiles (from ~/.config/teleskope/profiles/)
+ * 3. Discovery API (additionalPrinterColumns from CRD)
+ * 4. Generic fallback
+ */
+export function resolveResourceProfile(gvk: GVK): ResourceProfile {
+    const key = getProfileKey(gvk);
 
-     // 1. Check native profiles
-     const nativeProfile = NATIVE_PROFILES.get(key);
-     if (nativeProfile) {
-         return nativeProfile;
-     }
+    // 1. Check native profiles
+    const nativeProfile = NATIVE_PROFILES.get(key);
+    if (nativeProfile) {
+        return nativeProfile;
+    }
 
-     // 2. TODO: Check user profiles from config directory
-     // TODO: Load user-defined profiles from ~/.config/teleskope/profiles/
+    // 2. TODO: Check user profiles from config directory
+    // TODO: Load user-defined profiles from ~/.config/teleskope/profiles/
 
-     // 3. TODO: Check additionalPrinterColumns from CRD spec
-     // TODO: Parse CRD's additionalPrinterColumns for custom resources
+    // 3. TODO: Check additionalPrinterColumns from CRD spec
+    // TODO: Parse CRD's additionalPrinterColumns for custom resources
 
-     // 4. Generic fallback
-     return getGenericProfile(gvk);
- }
+    // 4. Generic fallback
+    return getGenericProfile(gvk);
+}
 
 // ============================================
 // Data Extraction
@@ -312,8 +312,16 @@ export function formatValue(value: unknown, type: ColumnDefinition["type"]): str
         case "age":
             return formatAge(value as string);
 
+        case "pod-enhanced-status":
+            const podResource = value as Record<string, unknown>;
+            const podStatus = getPodStatus(podResource);
+            const podIcon = getStatusIcon(podStatus);
+            return podIcon;
+
         case "status":
-            return String(value);
+            const status = String(value);
+            const icon = getStatusIcon(status);
+            return icon;
 
         case "list":
             if (Array.isArray(value)) {
@@ -372,11 +380,59 @@ export function getStatusClass(status: string): string {
     if (["running", "active", "healthy", "ready", "true", "succeeded"].includes(normalized)) {
         return "running";
     }
-    if (["pending", "progressing", "waiting", "containercreating"].includes(normalized)) {
+    if (["pending", "progressing", "waiting", "containercreating", "terminating"].includes(normalized)) {
         return "pending";
     }
-    if (["failed", "error", "crashloopbackoff", "imagepullbackoff", "false"].includes(normalized)) {
+    if (["failed", "error", "crashloopbackoff", "imagepullbackoff", "false", "terminated", "error"].includes(normalized)) {
         return "failed";
     }
+    if (["terminating"].includes(normalized)) {
+        return "terminating";
+    }
     return "unknown";
+}
+
+/**
+ * Get icon for status
+ */
+export function getStatusIcon(status: string): string {
+    const normalized = status?.toLowerCase().replace(/[\s-]/g, "") || "";
+
+    if (["running", "active", "healthy", "ready", "true", "succeeded"].includes(normalized)) {
+        return "✓";
+    }
+    if (["pending", "progressing", "waiting", "containercreating"].includes(normalized)) {
+        return "⟳";
+    }
+    if (["failed", "error", "crashloopbackoff", "imagepullbackoff", "false", "terminated", "error"].includes(normalized)) {
+        return "✕";
+    }
+    if (["terminating"].includes(normalized)) {
+        return "⏸";
+    }
+    return "?";
+}
+
+/**
+ * Get pod status including termination state
+ */
+export function getPodStatus(resource: Record<string, unknown>): string {
+    if (!resource) return "Unknown";
+
+    const metadata = resource.metadata as Record<string, unknown> | undefined;
+    const status = resource.status as Record<string, unknown> | undefined;
+
+    // Check if pod is being deleted
+    if (metadata?.deletionTimestamp) {
+        return "Terminating";
+    }
+
+    // Get phase from status
+    const phase = String(status?.phase || "").trim();
+    if (phase) {
+        // Capitalize first letter
+        return phase.charAt(0).toUpperCase() + phase.slice(1).toLowerCase();
+    }
+
+    return "Unknown";
 }

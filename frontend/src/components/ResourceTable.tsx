@@ -14,7 +14,10 @@ import {
     extractValue,
     formatValue,
     getStatusClass,
+    getStatusIcon,
+    getPodStatus,
     type ColumnDefinition,
+
 } from "../lib/profiles";
 
 interface ResourceTableProps {
@@ -75,10 +78,22 @@ export function ResourceTable({ resource, onRowClick, selectedResourceName }: Re
             .map((col: ColumnDefinition) => ({
                 id: col.header,
                 header: col.header,
+                size: col.width ? parseInt(col.width) : undefined,
                 accessorFn: (row: ResourceRow) => extractValue(row, col.path),
                 cell: ({ getValue }) => {
                     const value = getValue();
                     const formatted = formatValue(value, col.type);
+
+                    if (col.type === "pod-enhanced-status") {
+                        const podStatus = getPodStatus(value as Record<string, unknown>);
+                        const statusClass = getStatusClass(podStatus);
+                        const icon = getStatusIcon(podStatus);
+                        return (
+                            <span className={`status-badge ${statusClass}`} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%" }}>
+                                {icon}
+                            </span>
+                        );
+                    }
 
                     if (col.type === "status") {
                         const statusClass = getStatusClass(String(value));
@@ -120,6 +135,7 @@ export function ResourceTable({ resource, onRowClick, selectedResourceName }: Re
                                             : isError
                                                 ? "failed"
                                                 : "pending";
+
                                     return (
                                         <div
                                             key={index}
@@ -386,7 +402,10 @@ export function ResourceTable({ resource, onRowClick, selectedResourceName }: Re
                                         <th
                                             key={header.id}
                                             onClick={header.column.getToggleSortingHandler()}
-                                            style={{ cursor: "pointer" }}
+                                            style={{
+                                                cursor: "pointer",
+                                                width: header.column.getSize() !== 150 ? header.column.getSize() : undefined
+                                            }}
                                         >
                                             {flexRender(
                                                 header.column.columnDef.header,
@@ -400,22 +419,28 @@ export function ResourceTable({ resource, onRowClick, selectedResourceName }: Re
                             ))}
                         </thead>
                         <tbody>
-                            {table.getRowModel().rows.map((row) => (
-                                <tr
-                                    key={row.id}
-                                    onClick={() => handleRowClick(row.original)}
-                                    className={isRowSelected(row.original) ? "selected" : ""}
-                                >
-                                    {row.getVisibleCells().map((cell) => (
-                                        <td key={cell.id}>
-                                            {flexRender(
-                                                cell.column.columnDef.cell,
-                                                cell.getContext()
-                                            )}
-                                        </td>
-                                    ))}
-                                </tr>
-                            ))}
+                            {table.getRowModel().rows.map((row) => {
+                                const rowStatusClass = getStatusClass(getPodStatus(row.original));
+                                return (
+                                    <tr
+                                        key={row.id}
+                                        onClick={() => handleRowClick(row.original)}
+                                        className={isRowSelected(row.original) ? "selected" : ""}
+                                        style={rowStatusClass === "terminating" ? { opacity: 0.5 } : {}}
+                                        data-row-status={rowStatusClass}
+                                    >
+
+                                        {row.getVisibleCells().map((cell) => (
+                                            <td key={cell.id}>
+                                                {flexRender(
+                                                    cell.column.columnDef.cell,
+                                                    cell.getContext()
+                                                )}
+                                            </td>
+                                        ))}
+                                    </tr>
+                                );
+                            })}
                         </tbody>
                     </table>
                 )}

@@ -6,6 +6,10 @@ export function CopyToClipboard(arg1) {
   return window['go']['main']['App']['CopyToClipboard'](arg1);
 }
 
+export function DeleteResource(arg1, arg2, arg3, arg4, arg5, arg6) {
+  return window['go']['main']['App']['DeleteResource'](arg1, arg2, arg3, arg4, arg5, arg6);
+}
+
 export function EditResource(arg1, arg2, arg3, arg4, arg5, arg6) {
   return window['go']['main']['App']['EditResource'](arg1, arg2, arg3, arg4, arg5, arg6);
 }
@@ -28,6 +32,10 @@ export function GetKubeContexts() {
 
 export function GetNamespaces() {
   return window['go']['main']['App']['GetNamespaces']();
+}
+
+export function GetPodLogs(arg1) {
+  return window['go']['main']['App']['GetPodLogs'](arg1);
 }
 
 export function GetRelatedResources(arg1) {

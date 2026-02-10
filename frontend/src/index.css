@@ -180,24 +180,24 @@ body {
   gap: 0.5rem;
 }
 
-  .context-select {
-    background: var(--color-bg-tertiary);
-    border: 1px solid var(--color-border);
-    border-radius: 6px;
-    padding: 0.5rem 0.75rem;
-    color: var(--color-text-primary);
-    font-size: 0.875rem;
-    cursor: pointer;
-    min-width: 200px;
-    appearance: none;
-    -webkit-appearance: none;
-    -moz-appearance: none;
-  }
+.context-select {
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  color: var(--color-text-primary);
+  font-size: 0.875rem;
+  cursor: pointer;
+  min-width: 200px;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+}
 
-  .context-select:focus {
-    outline: none;
-    border-color: var(--color-accent);
-  }
+.context-select:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
 
 
 .context-status {
@@ -301,6 +301,7 @@ body {
   font-size: 0.875rem;
   color: var(--color-text-secondary);
   border-bottom: 1px solid var(--color-border);
+  vertical-align: middle;
 }
 
 .resource-table tr:hover td {
@@ -323,6 +324,16 @@ body {
   font-weight: 500;
 }
 
+
+
+.resource-table tr[data-row-status="terminating"] {
+  opacity: 0.5;
+}
+
+.resource-table tr[data-row-status="terminating"] .status-badge.terminating {
+  animation: none;
+}
+
 .status-badge.running,
 .status-badge.active,
 .status-badge.healthy,
@@ -332,9 +343,27 @@ body {
 }
 
 .status-badge.pending,
-.status-badge.progressing {
+.status-badge.progressing,
+.status-badge.terminating {
   background: rgba(234, 179, 8, 0.15);
   color: var(--color-warning);
+  position: relative;
+}
+
+.status-badge.terminating {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.6;
+  }
 }
 
 .status-badge.failed,
@@ -375,6 +404,21 @@ body {
 
 .container-status.terminated {
   background: var(--color-error);
+  animation: fadeOut 3s ease-in-out;
+}
+
+@keyframes fadeOut {
+  0% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.3;
+  }
+
+  100% {
+    opacity: 1;
+  }
 }
 
 .container-status.pending {

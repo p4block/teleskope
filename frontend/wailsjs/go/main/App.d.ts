@@ -5,6 +5,8 @@ import {main} from '../models';
 
 export function CopyToClipboard(arg1:string):Promise<void>;
 
+export function DeleteResource(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:string):Promise<void>;
+
 export function EditResource(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:string):Promise<void>;
 
 export function ExecPod(arg1:string,arg2:string,arg3:string):Promise<void>;
@@ -16,6 +18,8 @@ export function GetCurrentContext():Promise<string>;
 export function GetKubeContexts():Promise<Array<k8s.KubeContext>>;
 
 export function GetNamespaces():Promise<Array<string>>;
+
+export function GetPodLogs(arg1:main.LogsParams):Promise<string>;
 
 export function GetRelatedResources(arg1:main.RelatedParams):Promise<Array<any>>;
 

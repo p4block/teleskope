@@ -114,3 +114,19 @@ type RelatedParams struct {
 func (a *App) GetRelatedResources(params RelatedParams) ([]interface{}, error) {
 	return a.k8sClient.GetRelatedResources(params.Group, params.Version, params.Kind, params.Namespace, params.Name)
 }
+
+func (a *App) DeleteResource(group, version, kind, plural, namespace, name string) error {
+	return a.k8sClient.DeleteResource(group, version, kind, plural, namespace, name)
+}
+
+type LogsParams struct {
+	Namespace     string `json:"namespace"`
+	PodName       string `json:"podName"`
+	ContainerName string `json:"containerName"`
+	Follow        bool   `json:"follow"`
+	TailLines     int64  `json:"tailLines"`
+}
+
+func (a *App) GetPodLogs(params LogsParams) (string, error) {
+	return a.k8sClient.GetPodLogs(params.Namespace, params.PodName, params.ContainerName, params.Follow, params.TailLines)
+}

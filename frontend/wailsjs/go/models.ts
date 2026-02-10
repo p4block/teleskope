@@ -95,6 +95,26 @@ export namespace main {
 	        this.label_selector = source["label_selector"];
 	    }
 	}
+	export class LogsParams {
+	    namespace: string;
+	    podName: string;
+	    containerName: string;
+	    follow: boolean;
+	    tailLines: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new LogsParams(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.namespace = source["namespace"];
+	        this.podName = source["podName"];
+	        this.containerName = source["containerName"];
+	        this.follow = source["follow"];
+	        this.tailLines = source["tailLines"];
+	    }
+	}
 	export class RelatedParams {
 	    group: string;
 	    version: string;

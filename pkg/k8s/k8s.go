@@ -378,6 +378,63 @@ func (c *Client) GetRelatedResources(group, version, kind, namespace, name strin
 	return nil, nil
 }
 
+func (c *Client) DeleteResource(group, version, kind, plural, namespace, name string) error {
+	gv := schema.GroupVersionResource{
+		Group:    group,
+		Version:  version,
+		Resource: plural,
+	}
+
+	opts := metav1.DeleteOptions{}
+
+	if namespace != "" {
+		return c.DynamicClient.Resource(gv).Namespace(namespace).Delete(context.TODO(), name, opts)
+	}
+	return c.DynamicClient.Resource(gv).Delete(context.TODO(), name, opts)
+}
+
+func (c *Client) GetPodLogs(namespace, podName, containerName string, follow bool, tailLines int64) (string, error) {
+	currentContext, _ := c.GetCurrentContext()
+
+	kCmd := fmt.Sprintf("kubectl logs %s -n %s", podName, namespace)
+	if containerName != "" {
+		kCmd = fmt.Sprintf("%s -c %s", kCmd, containerName)
+	}
+	if follow {
+		kCmd = fmt.Sprintf("%s -f", kCmd)
+	}
+	if tailLines > 0 {
+		kCmd = fmt.Sprintf("%s --tail=%d", kCmd, tailLines)
+	}
+	if currentContext != "" {
+		kCmd = fmt.Sprintf("kubectl --context %s %s", currentContext, strings.TrimPrefix(kCmd, "kubectl "))
+	}
+
+	if follow {
+		// For follow mode, open in terminal
+		term, args := findTerminal()
+		if term == "" {
+			return "", fmt.Errorf("no terminal emulator found")
+		}
+
+		fmt.Printf("Following logs: %s in terminal %s\n", kCmd, term)
+
+		shCmd := fmt.Sprintf("%s", kCmd)
+		fullArgs := append(args, shCmd)
+		cmd := exec.Command(term, fullArgs...)
+		return "", cmd.Start()
+	}
+
+	// For non-follow mode, get logs directly
+	cmd := exec.Command("sh", "-c", kCmd)
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to get logs: %v", err)
+	}
+
+	return string(output), nil
+}
+
 func findTerminal() (string, []string) {
 	terminals := []struct {
 		name string
