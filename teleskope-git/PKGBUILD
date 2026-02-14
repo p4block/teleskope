@@ -1,0 +1,63 @@
+# Maintainer: Crstian <cristian@crstian.me>, P4block <> 
+
+pkgname=teleskope-git
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="A lightweight Kubernetes IDE built with Go and Wails"
+arch=('x86_64')
+url="https://github.com/p4block/teleskope"
+license=('MIT')
+depends=('gtk3' 'webkit2gtk')
+makedepends=('go' 'bun' 'git')
+provides=('teleskope')
+conflicts=('teleskope')
+
+source=("teleskope::git+https://github.com/p4block/teleskope.git")
+md5sums=('SKIP')
+
+pkgver() {
+    cd "$srcdir/teleskope"
+    git describe --tags --always --dirty 2>/dev/null | sed 's/^v//' | sed 's/-/_/g' || \
+    echo "0.1.0.r$(git rev-list --count HEAD).g$(git rev-parse --short HEAD)"
+}
+
+prepare() {
+    cd "$srcdir/teleskope"
+    go install github.com/wailsapp/wails/v2/cmd/wails@latest
+    
+    sed -i 's|module teleskope|module github.com/p4block/teleskope|' go.mod
+    sed -i 's|"teleskope/pkg/k8s"|"github.com/p4block/teleskope/pkg/k8s"|g' app.go
+    echo "replace github.com/p4block/teleskope => ." >> go.mod
+}
+
+build() {
+    cd "$srcdir/teleskope"
+    
+    export GOFLAGS="-buildmode=pie"
+    export CGO_CFLAGS_ALLOW=".*"
+    export CGO_CXXFLAGS_ALLOW=".*"
+    export CGO_LDFLAGS_ALLOW=".*"
+    export PATH="$HOME/go/bin:$(go env GOPATH)/bin:$PATH"
+    
+    wails build -clean
+}
+
+package() {
+    cd "$srcdir/teleskope"
+    
+    install -Dm755 "build/bin/teleskope" "$pkgdir/usr/bin/teleskope"
+    
+    install -Dm644 "build/app.ico" "$pkgdir/usr/share/pixmaps/teleskope.ico" 2>/dev/null || true
+    
+    mkdir -p "$pkgdir/usr/share/applications"
+    cat > "$pkgdir/usr/share/applications/teleskope.desktop" <<EOF
+[Desktop Entry]
+Name=Teleskope
+Comment=A lightweight Kubernetes IDE
+Exec=teleskope
+Icon=teleskope
+Terminal=false
+Type=Application
+Categories=Development;Utility;
+EOF
+}
