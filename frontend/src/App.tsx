@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Sidebar } from "./components/Sidebar";
 import { ContextSwitcher } from "./components/ContextSwitcher";
 import { ResourceTable } from "./components/ResourceTable";
 import { ResourceDetail } from "./components/ResourceDetail";
+import { Dashboard } from "./components/Dashboard";
 import type { ApiResourceInfo } from "./hooks/useKube";
 import "./index.css";
 
@@ -25,36 +26,75 @@ interface SelectedDetail {
 }
 
 function AppContent() {
-  const [selectedResource, setSelectedResource] = useState<ApiResourceInfo | null>(
-    null
-  );
-  const [selectedDetail, setSelectedDetail] = useState<SelectedDetail | null>(null);
+  const [isLargeScreen, setIsLargeScreen] = useState(window.innerWidth >= 1280);
+  const [currentView, setCurrentView] = useState<"resources" | "dashboard">("resources");
 
-  // Handle resource type selection from sidebar
-  const handleResourceSelect = (resource: ApiResourceInfo) => {
-    setSelectedResource(resource);
-    // Clear detail panel when switching resource types
-    setSelectedDetail(null);
-  };
+  useEffect(() => {
+    const handler = () => setIsLargeScreen(window.innerWidth >= 1280);
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+  }, []);
+
+  const [selectedResource, setSelectedResource] =
+    useState<ApiResourceInfo | null>(null);
+  const [selectedDetail, setSelectedDetail] = useState<SelectedDetail | null>(
+    null,
+  );
+  const [detailPanelOpen, setDetailPanelOpen] = useState(true);
+
+  // Sync detail panel state with screen size
+  useEffect(() => {
+    setDetailPanelOpen(isLargeScreen);
+  }, [isLargeScreen]);
+
+  // Handle Escape key to close sidebar
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setDetailPanelOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   // Handle row click in table
   const handleRowClick = (
     resourceName: string,
     namespace: string | undefined,
-    initialData?: Record<string, unknown>
+    initialData?: Record<string, unknown>,
   ) => {
     setSelectedDetail({ resourceName, namespace, initialData });
+    setDetailPanelOpen(true);
   };
 
-  // Handle close detail panel
-  const handleCloseDetail = () => {
+  // Handle resource selection from sidebar
+  const handleResourceSelect = (resource: ApiResourceInfo) => {
+    setCurrentView("resources");
+    setSelectedResource(resource);
     setSelectedDetail(null);
   };
 
+  const handleDashboardSelect = () => {
+    setCurrentView("dashboard");
+    setSelectedResource(null);
+    setSelectedDetail(null);
+  };
+
+  // Handle toggling detail panel
+  const handleToggleDetailPanel = () => {
+    setDetailPanelOpen((prev) => !prev);
+  };
+
   // Handle navigation from related resources
-  const handleNavigate = (resource: ApiResourceInfo, name: string, namespace?: string) => {
+  const handleNavigate = (
+    resource: ApiResourceInfo,
+    name: string,
+    namespace?: string,
+  ) => {
     setSelectedResource(resource);
     setSelectedDetail({ resourceName: name, namespace });
+    setDetailPanelOpen(true);
   };
 
   return (
@@ -62,7 +102,9 @@ function AppContent() {
       {/* Sidebar with resource navigation */}
       <Sidebar
         onResourceSelect={handleResourceSelect}
+        onDashboardSelect={handleDashboardSelect}
         selectedResource={selectedResource}
+        currentView={currentView}
       />
 
       {/* Main content area */}
@@ -70,29 +112,52 @@ function AppContent() {
         {/* Header bar with context switcher */}
         <header className="header-bar">
           <h2 className="header-title">
-            {selectedResource ? selectedResource.kind : "Teleskope"}
+            {currentView === "dashboard" ? "Cluster Map" : selectedResource ? selectedResource.kind : "Teleskope"}
           </h2>
           <ContextSwitcher />
         </header>
 
         {/* Content area with optional detail panel */}
-        <div className={`content-area ${selectedDetail ? "content-with-detail" : ""}`}>
-          {selectedResource ? (
+        <div
+          className={`content-area ${detailPanelOpen ? "content-with-detail" : ""}`}
+        >
+          {currentView === "dashboard" ? (
             <>
-              <div className={`content-main ${selectedDetail ? "with-detail" : ""}`}>
+              <div
+                className={`content-main ${detailPanelOpen ? "with-detail" : ""}`}
+                style={{ padding: 0, overflow: "hidden" }}
+              >
+                <Dashboard onNavigate={handleNavigate} />
+              </div>
+              {detailPanelOpen && selectedResource && (
+                <ResourceDetail
+                  resource={selectedResource}
+                  resourceName={selectedDetail?.resourceName}
+                  namespace={selectedDetail?.namespace}
+                  initialData={selectedDetail?.initialData}
+                  onClose={handleToggleDetailPanel}
+                  onNavigate={handleNavigate}
+                />
+              )}
+            </>
+          ) : selectedResource ? (
+            <>
+              <div
+                className={`content-main ${detailPanelOpen ? "with-detail" : ""}`}
+              >
                 <ResourceTable
                   resource={selectedResource}
                   onRowClick={handleRowClick}
                   selectedResourceName={selectedDetail?.resourceName}
                 />
               </div>
-              {selectedDetail && (
+              {detailPanelOpen && (
                 <ResourceDetail
                   resource={selectedResource}
-                  resourceName={selectedDetail.resourceName}
-                  namespace={selectedDetail.namespace}
-                  initialData={selectedDetail.initialData}
-                  onClose={handleCloseDetail}
+                  resourceName={selectedDetail?.resourceName}
+                  namespace={selectedDetail?.namespace}
+                  initialData={selectedDetail?.initialData}
+                  onClose={handleToggleDetailPanel}
                   onNavigate={handleNavigate}
                 />
               )}
